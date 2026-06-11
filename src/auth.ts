@@ -17,12 +17,7 @@ export function verifyToken(
 ): boolean {
   if (!token) return false;
   const expected = Buffer.from(signGuestId(secret, guestId));
-  let provided: Buffer;
-  try {
-    provided = Buffer.from(token);
-  } catch {
-    return false;
-  }
+  const provided = Buffer.from(token);
   if (expected.length !== provided.length) return false;
   return timingSafeEqual(expected, provided);
 }

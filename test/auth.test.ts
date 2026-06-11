@@ -30,6 +30,17 @@ describe('auth', () => {
     expect(verifyToken(SECRET, 'g1', '')).toBe(false);
   });
 
+  it('verifyToken 은 비정상 형태의 토큰을 거부한다', () => {
+    const valid = signGuestId(SECRET, 'g1');
+    // 길이가 다른 비-hex 토큰
+    expect(verifyToken(SECRET, 'g1', 'not-a-hex-token')).toBe(false);
+    // 유효 서명과 같은 길이지만 값이 다른 토큰 (timingSafeEqual 경로까지 도달)
+    const sameLenWrong = 'f'.repeat(valid.length);
+    expect(sameLenWrong.length).toBe(valid.length);
+    expect(sameLenWrong).not.toBe(valid);
+    expect(verifyToken(SECRET, 'g1', sameLenWrong)).toBe(false);
+  });
+
   it('extractBearer 는 Bearer 토큰만 뽑는다', () => {
     expect(extractBearer('Bearer abc')).toBe('abc');
     expect(extractBearer('bearer abc')).toBe('abc');

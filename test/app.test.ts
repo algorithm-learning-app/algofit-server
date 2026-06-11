@@ -159,4 +159,84 @@ describe('algofit-server app', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('형식이 잘못된 guestId 는 400 (토큰 검증 전 거부)', async () => {
+    const badId = 'has space/and..slash';
+    const res = await app.request(`/v1/progress/${encodeURIComponent(badId)}`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  describe('본문 크기 제한(maxBodyBytes)', () => {
+    let smallStore: ProgressStore;
+    let smallApp: ReturnType<typeof createApp>;
+
+    beforeEach(() => {
+      smallStore = createSqliteStore(':memory:');
+      smallApp = createApp({ store: smallStore, secret: SECRET, maxBodyBytes: 50 });
+    });
+
+    afterEach(() => {
+      smallStore.close();
+    });
+
+    it('본문이 상한을 넘으면 413 (실제 바이트 기준)', async () => {
+      // app.request 가 실제 Content-Length 를 설정하므로 사전 거부 경로도 함께 검증된다.
+      const big = JSON.stringify({ updatedAt: 1000, data: { blob: 'x'.repeat(200) } });
+      expect(big.length).toBeGreaterThan(50);
+      const res = await smallApp.request(`/v1/progress/${GUEST}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: big,
+      });
+      expect(res.status).toBe(413);
+    });
+
+    it('상한 이하 본문은 통과한다(200)', async () => {
+      const small = JSON.stringify({ updatedAt: 1000, data: {} });
+      expect(small.length).toBeLessThanOrEqual(50);
+      const res = await smallApp.request(`/v1/progress/${GUEST}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: small,
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  it('순차 PUT LWW: 최신 updatedAt 이 이기고 더 오래된 것은 409 로 거부된다', async () => {
+    // t=1000 저장
+    const r1 = await app.request(`/v1/progress/${GUEST}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ updatedAt: 1000, data: { v: 1 } }),
+    });
+    expect(r1.status).toBe(200);
+
+    // t=3000 (더 최신) → 채택
+    const r2 = await app.request(`/v1/progress/${GUEST}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ updatedAt: 3000, data: { v: 3 } }),
+    });
+    expect(r2.status).toBe(200);
+
+    // t=2000 (현재본보다 오래됨) → 409, 현재본은 t=3000 그대로
+    const r3 = await app.request(`/v1/progress/${GUEST}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ updatedAt: 2000, data: { v: 2 } }),
+    });
+    expect(r3.status).toBe(409);
+
+    const get = await app.request(`/v1/progress/${GUEST}`, {
+      headers: authHeaders(),
+    });
+    expect(await get.json()).toEqual({
+      guestId: GUEST,
+      updatedAt: 3000,
+      data: { v: 3 },
+    });
+  });
 });

@@ -24,16 +24,20 @@ export function createApp(opts: AppOptions): Hono {
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
   // guestId 경로 파라미터 + Bearer 토큰 검증 미들웨어.
-  const requireAuth = app.use('/v1/progress/:guestId', async (c, next) => {
+  app.use('/v1/progress/:guestId', async (c, next) => {
     const guestId = c.req.param('guestId');
     if (!guestId) return c.json({ error: 'guestId required' }, 400);
+    // guestId 형식 검증: UUID v4(모바일/웹) 및 base64url 핸드오프 토큰만 허용.
+    // 토큰 검증 전에 거부해 비정상 입력을 빠르게 걸러낸다.
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(guestId)) {
+      return c.json({ error: 'invalid guestId' }, 400);
+    }
     const token = extractBearer(c.req.header('Authorization'));
     if (!verifyToken(secret, guestId, token)) {
       return c.json({ error: 'unauthorized' }, 401);
     }
     await next();
   });
-  void requireAuth;
 
   app.get('/v1/progress/:guestId', (c) => {
     const guestId = c.req.param('guestId');
@@ -45,14 +49,21 @@ export function createApp(opts: AppOptions): Hono {
   app.put('/v1/progress/:guestId', async (c) => {
     const guestId = c.req.param('guestId');
 
+    // Content-Length 헤더는 빠른 사전 거부용(청크/누락/비정상 값으로 우회 가능).
     const contentLength = Number(c.req.header('Content-Length') ?? '0');
     if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
       return c.json({ error: 'payload too large' }, 413);
     }
 
+    // 실제 바이트 수로 본문 크기를 강제한다(헤더 우회 방지).
+    const raw = await c.req.text();
+    if (Buffer.byteLength(raw) > maxBodyBytes) {
+      return c.json({ error: 'payload too large' }, 413);
+    }
+
     let body: PutBody;
     try {
-      body = (await c.req.json()) as PutBody;
+      body = JSON.parse(raw) as PutBody;
     } catch {
       return c.json({ error: 'invalid json' }, 400);
     }
