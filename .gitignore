@@ -6,3 +6,6 @@ data/
 .env.*
 !.env.example
 .DS_Store
+
+# OMC / Claude 작업 상태
+.omc/

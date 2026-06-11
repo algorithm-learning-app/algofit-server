@@ -1,0 +1,29 @@
+{
+  "name": "@algofit/server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Algofit 게스트 진행 동기화 백엔드 (자체호스팅, Node + Hono + SQLite)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "better-sqlite3": "^11.8.1",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "~5.6.3",
+    "vitest": "^3.2.6"
+  }
+}
